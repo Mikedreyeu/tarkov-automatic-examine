@@ -28,6 +28,7 @@ mon = {'left': 0, 'top': 0, 'width': 1920, 'height': 1080}
 inv_p1 = Point(9, 262)
 inv_p2 = Point(638, 954)
 r_side = 62
+scrollbar_x_pos = (640, 648)
 
 PAGE_SIZE_Y = 11
 PAGE_SIZE_X = 10
@@ -158,7 +159,17 @@ def get_inventory_area(screen_img):
     return screen_img[inv_p1.y:inv_p2.y, inv_p1.x:inv_p2.x]
 
 
-mouse_click_thread = threading.Thread(target=mouse_clicker, args=[mouse_coords_queue])
+def scroll_down(items: int):
+    pyautogui.click(inv_p2.x - r_side / 2, inv_p2.y)
+    for _ in range(items):
+        pyautogui.scroll(-1)
+    pyautogui.moveTo(mon['width'], mon['height'] / 2)
+
+
+def is_scrollbar_at_bottom(img):
+    """ Checking an area here to prevent an edge case when mouse gets in the way """
+    # if area is bright, then it's at the bottom
+    return np.min(img[inv_p2.y:(inv_p2.y + int(r_side * 0.75)), scrollbar_x_pos[0]:scrollbar_x_pos[1]]) != 0
 
 
 def main_loop():
@@ -177,8 +188,12 @@ def main_loop():
 
         item_indexes = np.where(inventory_mask_full_item)
         if len(item_indexes[0]) == 0:
-            logging.info('No new items found, starting over')
-            sleep(1)
+            if is_scrollbar_at_bottom(scr_img):
+                logging.info('Reached the bottom, ending execution')
+                break
+            logging.info('No new items found, scrolling down')
+            scroll_down(PAGE_SIZE_Y)
+            clicked_cells = []
             continue
 
         index_x, index_y = item_indexes[0][0], item_indexes[1][0]
