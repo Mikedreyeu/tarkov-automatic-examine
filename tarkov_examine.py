@@ -26,9 +26,11 @@ mon = {'left': 0, 'top': 0, 'width': 1920, 'height': 1080}
 
 
 inv_p1 = Point(9, 262)
-inv_p2 = Point(639, 954)
+inv_p2 = Point(638, 954)
 r_side = 62
 
+PAGE_SIZE_Y = 11
+PAGE_SIZE_X = 10
 
 GREY_RANGE = ([64, 64, 64, 0], [86, 86, 86, 255])
 DARK_GREY_RANGE = ([41, 41, 41, 0], [66, 66, 66, 255])
@@ -48,7 +50,7 @@ def get_img_mask(img, lower_bound, upper_bound):
 
 def init_inventory_matrix(upper_left_corner: Point, r_side: int):
     x1, y1 = upper_left_corner
-    inv_matrix = np.ndarray(shape=(11, 10, 2, 2), dtype=int)
+    inv_matrix = np.ndarray(shape=(PAGE_SIZE_Y, PAGE_SIZE_X, 2, 2), dtype=int)
     for i in range(len(inv_matrix)):
         for j in range(len(inv_matrix[i])):
             inv_matrix[i][j] = [
@@ -101,7 +103,7 @@ def mouse_clicker(coords_queue: List[Point]):
                     if args.debug or args.no_wheel_click:
                         pyautogui.click(coords.x, coords.y)
                     else:
-                        pyautogui.click(coords.x, coords.y, button=pyautogui.MIDDLE)
+                        pyautogui.middleClick(coords.x, coords.y)
                     logging.info(f'Mouse click: {pyautogui.position()}')
             pyautogui.moveTo(mon['width'], mon['height'] / 2)
     except pyautogui.FailSafeException as error:
@@ -131,9 +133,9 @@ def get_item_inv_mask(img, inv_matrix):
     )
 
     if args.debug:
-        cv.imshow('mask_hatching', img_mask_hatching_grey[inv_p1.y:inv_p2.y, inv_p1.x:inv_p2.x])
-        cv.imshow('img_mask_hatching_dark_grey', img_mask_hatching_dark_grey[inv_p1.y:inv_p2.y, inv_p1.x:inv_p2.x])
-        cv.imshow('img_mask_object', img_mask_object[inv_p1.y:inv_p2.y, inv_p1.x:inv_p2.x])
+        cv.imshow('mask_hatching', get_inventory_area(img_mask_hatching_grey))
+        cv.imshow('img_mask_hatching_dark_grey', get_inventory_area(img_mask_hatching_dark_grey))
+        cv.imshow('img_mask_object', get_inventory_area(img_mask_object))
 
     return inventory_mask_full_item
 
@@ -148,30 +150,29 @@ def take_screenshots_until_found(inv_matrix):
             inv_mask_full_item = get_item_inv_mask(img, inv_matrix)
 
             if np.count_nonzero(inv_mask_full_item) > 0:
-                logging.info('Not researched items found')
+                logging.info('Not examined items found')
                 return img, inv_mask_full_item
 
 
-stop_event = threading.Event()
-new_mouse_coords_added = threading.Condition()
-mouse_coords_queue = []
+def get_inventory_area(screen_img):
+    return screen_img[inv_p1.y:inv_p2.y, inv_p1.x:inv_p2.x]
+
 
 mouse_click_thread = threading.Thread(target=mouse_clicker, args=[mouse_coords_queue])
 
-inventory_matrix = init_inventory_matrix(inv_p1, r_side)
-clicked_cells: List[tuple] = []
 
-mouse_click_thread.start()
-try:
+def main_loop():
+    inventory_matrix = init_inventory_matrix(inv_p1, r_side)
+    clicked_cells: List[tuple] = []
+
     while True:
         scr_img, inventory_mask_full_item = take_screenshots_until_found(inventory_matrix)
         # Remove clicked item from the mask
-        # (Ideally it should've been handled in np.where, but this seems more straightforward)
         delete_clicked_items_from_mask(inventory_mask_full_item, clicked_cells)
 
         if args.debug:
             draw_rectangles(scr_img, inventory_matrix, inventory_mask_full_item, (0, 0, 255), 2)
-            cv.imshow('tarkov research', scr_img[inv_p1.y:inv_p2.y, inv_p1.x:inv_p2.x])
+            cv.imshow('Tarkov examine', get_inventory_area(scr_img))
             cv.waitKey(0)
 
         item_indexes = np.where(inventory_mask_full_item)
@@ -179,16 +180,28 @@ try:
             logging.info('No new items found, starting over')
             sleep(1)
             continue
+
         index_x, index_y = item_indexes[0][0], item_indexes[1][0]
         (x1, y1), _ = inventory_matrix[index_x][index_y]
 
-        # One click per screenshot to skip large already researched items
+        # One click per screenshot to skip large already examined items
         mouse_coords_queue.append(get_box_center(x1, y1))
         clicked_cells.append((index_x, index_y))
 
         with new_mouse_coords_added:
             new_mouse_coords_added.notify()
         sleep(1.1)
+
+
+stop_event = threading.Event()
+new_mouse_coords_added = threading.Condition()
+mouse_coords_queue = []
+
+mouse_click_thread = threading.Thread(target=mouse_clicker, args=[mouse_coords_queue])
+mouse_click_thread.start()
+
+try:
+    main_loop()
 except KeyboardInterrupt:
     logging.info('KeyboardInterrupt, stopping execution')
 except Exception as e:
