@@ -155,6 +155,13 @@ def take_screenshots_until_found(inv_matrix):
                 return img, inv_mask_full_item
 
 
+def take_screenshot():
+    with mss() as sct:
+        screenshot = sct.grab(mon)
+        img = np.array(screenshot)
+        return img
+
+
 def get_inventory_area(screen_img):
     return screen_img[inv_p1.y:inv_p2.y, inv_p1.x:inv_p2.x]
 
@@ -177,9 +184,14 @@ def main_loop():
     clicked_cells: List[tuple] = []
 
     while True:
-        scr_img, inventory_mask_full_item = take_screenshots_until_found(inventory_matrix)
+        scr_img = take_screenshot()
+        # Get inventory mask with unexamined items
+        inventory_mask_full_item = get_item_inv_mask(scr_img, inventory_matrix)
         # Remove clicked item from the mask
         delete_clicked_items_from_mask(inventory_mask_full_item, clicked_cells)
+
+        if np.count_nonzero(inventory_mask_full_item) > 0:
+            logging.info('Not examined items found')
 
         if args.debug:
             draw_rectangles(scr_img, inventory_matrix, inventory_mask_full_item, (0, 0, 255), 2)
