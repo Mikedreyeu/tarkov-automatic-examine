@@ -42,6 +42,15 @@ DARK_GREY_THRESHOLD = 300
 OBJECT_THRESHOLD = 100
 
 
+class Inventory:
+    pass
+    # todo If I ever come back to this, the code should be heavily refactored:
+    # todo - init_inventory_matrix
+    # todo - move other matrix requiring funcs to this class
+    # todo - reset_clicked_cells
+    # todo Because now it's just a kludge
+
+
 def get_img_mask(img, lower_bound, upper_bound):
     lower_grey = np.array(lower_bound)
     upper_grey = np.array(upper_bound)
