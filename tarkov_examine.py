@@ -234,10 +234,25 @@ new_mouse_coords_added = threading.Condition()
 mouse_coords_queue = []
 
 mouse_click_thread = threading.Thread(target=mouse_clicker, args=[mouse_coords_queue])
-mouse_click_thread.start()
 
 try:
-    main_loop()
+    while True:
+        print('Press Enter to run.')
+        print('Execution will start with a 5 sec delay. Open tarkov on the desired trader screen.')
+        print('To stop execution move the mouse to a corner of the screen.')
+        input()
+        sleep(5)
+        
+        if not mouse_click_thread.is_alive():
+            mouse_click_thread.start()
+        
+        try:
+            main_loop()
+        except pyautogui.FailSafeException:
+            pass
+        
+        print()
+        
 except KeyboardInterrupt:
     logging.info('KeyboardInterrupt, stopping execution')
 except Exception as e:
